@@ -13,7 +13,7 @@
 WebTRIS_reports <- function(sites = NA,
                      period = "daily",
                      start_date = Sys.Date() - 60,
-                     end_date = Sys.Date(),
+                     end_date = Sys.Date()
                     )
 {
   # Check Valid Inputs
