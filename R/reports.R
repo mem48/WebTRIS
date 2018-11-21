@@ -47,47 +47,55 @@ WebTRIS_reports <- function(sites = NA,
     # Check for no data returned
     if(nchar(text) < 100){
       if(text == ""){
-        message("No data returned for that site and time period")
-        stop()
+        return("No data returned for that site and time period")
+        #stop()
       }
       if(grepl('Report Request Invalid',text_fail)){
-        message("Invalid request")
-        stop()
+        return("Invalid request")
+        #stop()
+      }
+    }else{
+      # parse text to json
+      asjson <- jsonlite::fromJSON(text)
+
+      if(page == 1){
+        return(asjson)
+      }else{
+        return(asjson$Rows)
       }
     }
 
-    # parse text to json
-    asjson <- jsonlite::fromJSON(text)
 
-    if(page == 1){
-      return(asjson)
-    }else{
-      return(asjson$Rows)
-    }
 
   }
 
   result <- get_data(1, sites, start_date, end_date)
-  res_header <- result$Header
-  res_data <- result$Rows
+  if(class(result) == "character"){
+    message(result)
+    return(NA)
+  }else{
+    res_header <- result$Header
+    res_data <- result$Rows
 
 
-  # Check if multiple requests needed
-  if(res_header$row_count > nrow(res_data)){
-    nreq = ceiling(res_header$row_count / 40000)
-    res_list <- lapply(seq(2,nreq),get_data, sites = sites, start_date = start_date, end_date = end_date)
-    res_data <- list(res_data)
-    res_list <- c(res_data, res_list)
-    res_data <- dplyr::bind_rows(res_list)
-    rm(res_list)
+    # Check if multiple requests needed
+    if(res_header$row_count > nrow(res_data)){
+      nreq = ceiling(res_header$row_count / 40000)
+      res_list <- lapply(seq(2,nreq),get_data, sites = sites, start_date = start_date, end_date = end_date)
+      res_data <- list(res_data)
+      res_list <- c(res_data, res_list)
+      res_data <- dplyr::bind_rows(res_list)
+      rm(res_list)
+    }
+
+
+    # Format the Data
+    res_data$DateTime_Ending <- lubridate::ymd_hms(paste0(substr(res_data$`Report Date`,1,10)," ",res_data$`Time Period Ending`))
+    res_data <- res_data[,c("Site Name","DateTime_Ending","Time Interval",
+                            names(res_data)[!names(res_data) %in% c("Site Name","DateTime_Ending","Time Interval","Report Date","Time Period Ending")])]
+    res_data[,3:23] <- lapply(res_data[,3:23], as.numeric)
+
+    return(res_data)
   }
 
-
-  # Format the Data
-  res_data$DateTime_Ending <- lubridate::ymd_hms(paste0(substr(res_data$`Report Date`,1,10)," ",res_data$`Time Period Ending`))
-  res_data <- res_data[,c("Site Name","DateTime_Ending","Time Interval",
-                         names(res_data)[!names(res_data) %in% c("Site Name","DateTime_Ending","Time Interval","Report Date","Time Period Ending")])]
-  res_data[,3:23] <- lapply(res_data[,3:23], as.numeric)
-
-  return(res_data)
 }

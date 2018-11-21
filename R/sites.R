@@ -1,13 +1,15 @@
 #' Get sites
 #'
 #' @param sites Number vector of site ids or NA for all sites
+#' @param clean Logical, should the Name varialbe be cleaned?
+#' @param spatial Logical, should the result be converted to spatial data.frame
 #'
 #' @export
 #'
 #' @details
 #' This function returns sites data for the given WebTRIS site based
 #'
-WebTRIS_sites <- function(sites = NA, clean = TRUE)
+WebTRIS_sites <- function(sites = NA, clean = TRUE, spatial = TRUE)
 {
   # Check Valid Inputs
   api <- "v1.0"
@@ -27,6 +29,10 @@ WebTRIS_sites <- function(sites = NA, clean = TRUE)
 
   res_header <- asjson$row_count
   res_data <- asjson$sites
+
+  if(spatial){
+    res_data <- sf::st_as_sf(res_data, coords = c("Longitude","Latitude"), crs = 4326)
+  }
 
 
   return(res_data)
