@@ -34,6 +34,9 @@ WebTRIS_sites <- function(sites = NA, clean = TRUE, spatial = TRUE)
     res_data <- sf::st_as_sf(res_data, coords = c("Longitude","Latitude"), crs = 4326)
   }
 
+  if(clean){
+    res_data = WebTRIS_clean_sites(res_data)
+  }
 
   return(res_data)
 }
@@ -56,6 +59,6 @@ WebTRIS_clean_sites <- function(x){
   nms4 = sapply(nms, function(l){if(length(l)>3){l[[4]]}else{NA}} )
 
   x$direction = as.factor(gsub(" ","",nms4))
-  x$name = nms1
+  x$Name = nms1
   return(x)
 }

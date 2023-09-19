@@ -11,9 +11,9 @@
 #' This function returns a report for the given WebTRIS site based
 #'
 WebTRIS_reports <- function(sites = NA,
-                     period = "daily",
-                     start_date = Sys.Date() - 60,
-                     end_date = Sys.Date()
+                     period = "annual",
+                     start_date = lubridate::ymd("2014-01-01"),
+                     end_date = lubridate::ymd("2022-12-31")
                     )
 {
   # Check Valid Inputs
@@ -25,49 +25,6 @@ WebTRIS_reports <- function(sites = NA,
   start_date <- as.character(format(start_date, "%d%m%Y"))
   end_date <-  as.character(format(end_date, "%d%m%Y"))
 
-
-  #Get Data function
-  get_data <- function(page, sites, start_date, end_date){
-    reqUrl = paste0("http://webtris.highwaysengland.co.uk/api/",api,"/reports/",period)
-    # Construct URL
-    req <- httr::GET(
-      reqUrl,
-      query = list(
-        sites = sites,
-        start_date = start_date,
-        end_date = end_date,
-        page = page,
-        page_size = 40000
-      )
-    )
-
-    # convert response content into text
-    text <- httr::content(req, as = "text", encoding = "UTF-8")
-
-    # Check for no data returned
-    if(nchar(text) < 100){
-      if(text == ""){
-        return("No data returned for that site and time period")
-        #stop()
-      }
-      if(grepl('Report Request Invalid',text_fail)){
-        return("Invalid request")
-        #stop()
-      }
-    }else{
-      # parse text to json
-      asjson <- jsonlite::fromJSON(text)
-
-      if(page == 1){
-        return(asjson)
-      }else{
-        return(asjson$Rows)
-      }
-    }
-
-
-
-  }
 
   result <- get_data(1, sites, start_date, end_date)
   if(class(result) == "character"){
@@ -99,3 +56,110 @@ WebTRIS_reports <- function(sites = NA,
   }
 
 }
+
+
+#Get Data function
+get_data <- function(page, sites, start_date, end_date, api = "v1.0", period = "annual"){
+  reqUrl = paste0("http://webtris.highwaysengland.co.uk/api/",api,"/reports/",period)
+  # Construct URL
+  req <- httr::GET(
+    reqUrl,
+    query = list(
+      sites = sites,
+      start_date = start_date,
+      end_date = end_date,
+      page = page,
+      page_size = 40000
+    )
+  )
+
+  # convert response content into text
+  text <- httr::content(req, as = "text", encoding = "UTF-8")
+
+  # Check for no data returned
+  if(nchar(text) < 100){
+    if(text == ""){
+      return("No data returned for that site and time period")
+      #stop()
+    }
+    if(grepl('Report Request Invalid',text_fail)){
+      return("Invalid request")
+      #stop()
+    }
+  }else{
+    # parse text to json
+    asjson <- jsonlite::fromJSON(text)
+
+    report_annual = asjson$AnnualReportBody
+    report_month = report_annual$AnnualReportMonthlyDataRows
+    report_annual$AnnualReportMonthlyDataRows = NULL
+    report_month = dplyr::bind_rows(report_month, .id = "year")
+    report_month$year = report_annual$Year[as.numeric(report_month$year)]
+
+    monthrow = report_month$AnnualReportRow
+    report_month$AnnualReportRow = NULL
+    report_month = cbind(report_month, monthrow)
+    report_month$SiteId = report_annual$SiteId[1]
+
+    annualrow_tot = report_annual$AnnualReportTotals
+    annualrow_ave = report_annual$AnnualReportAverages
+    report_annual$AnnualReportTotals = NULL
+    report_annual$AnnualReportAverages = NULL
+    names(annualrow_tot) = paste0(names(annualrow_tot),"_total")
+    names(annualrow_ave) = paste0(names(annualrow_ave),"_ave")
+
+    report_annual = cbind(report_annual, annualrow_tot, annualrow_ave)
+
+    # Format numeric/date
+    for(i in 1:ncol(report_annual)){
+      if(!names(report_annual)[i] %in% c("SiteId",
+                                        "PeakDailyFlowDate_total","PeakHourlyFlowDate_total")){
+        report_annual[,names(report_annual)[i]] = as.numeric(report_annual[,names(report_annual)[i]])
+      }
+    }
+
+    report_annual$PeakDailyFlowDate_total <- lubridate::dmy_hms(report_annual$PeakDailyFlowDate_total)
+    report_annual$PeakHourlyFlowDate_total <- lubridate::dmy_hms(report_annual$PeakHourlyFlowDate_total)
+
+    for(i in 1:ncol(report_month)){
+      if(!names(report_month)[i] %in% c("SiteId","MonthName")){
+        report_month[,names(report_month)[i]] = as.numeric(report_month[,names(report_month)[i]])
+      }
+    }
+
+
+
+    return(list(annual = report_annual,
+                month = report_month
+                ))
+
+  }
+
+
+
+}
+
+
+get_all_annual_reports = function(SiteIds){
+
+  res = pbapply::pblapply(SiteIds, get_data, page = 1, start_date = "01012014", end_date = "31122022")
+  return(res)
+
+  # res_annual = lapply(res, `[[`, 1)
+  # #res_annual = dplyr::bind_rows(res_annual)
+  #
+  # res_month = lapply(res, `[[`, 2)
+  # #res_month = dplyr::bind_rows(res_month)
+  #
+  # return(list(annual = res_annual,
+  #             month = res_month
+  # ))
+
+}
+sites = readRDS("sites.Rds")
+dat = get_all_annual_reports(sites$Id)
+annual = dat$annual
+month = dat$month
+saveRDS(dat, "traffic_annual_2014_2022raw.Rds")
+saveRDS(month, "traffic_monthly_2014_2022.Rds")
+
