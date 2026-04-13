@@ -82,7 +82,7 @@ get_data <- function(page, sites, start_date, end_date, api = "v1.0", period = "
       return("No data returned for that site and time period")
       #stop()
     }
-    if(grepl('Report Request Invalid',text_fail)){
+    if(grepl('Report Request Invalid',text)){
       return("Invalid request")
       #stop()
     }
@@ -140,26 +140,28 @@ get_data <- function(page, sites, start_date, end_date, api = "v1.0", period = "
 }
 
 
-get_all_annual_reports = function(SiteIds){
+get_all_annual_reports = function(SiteIds, start_date = "01012014", end_date = "31122022"){
 
-  res = pbapply::pblapply(SiteIds, get_data, page = 1, start_date = "01012014", end_date = "31122022")
-  return(res)
+  res = pbapply::pblapply(SiteIds, get_data, page = 1, start_date = start_date, end_date = end_date)
+  #return(res)
 
-  # res_annual = lapply(res, `[[`, 1)
-  # #res_annual = dplyr::bind_rows(res_annual)
-  #
-  # res_month = lapply(res, `[[`, 2)
-  # #res_month = dplyr::bind_rows(res_month)
-  #
-  # return(list(annual = res_annual,
-  #             month = res_month
-  # ))
+  res_annual = lapply(res, `[[`, 1)
+  res_annual = res_annual[lengths(res_annual) > 1]
+  res_annual = dplyr::bind_rows(res_annual)
+
+  res_month = lapply(res, function(x){
+    if(length(x)>1){
+      return(x[[2]])
+      }
+    return(NULL)
+    })
+  res_month = res_month[lengths(res_month) > 1]
+  res_month = dplyr::bind_rows(res_month)
+
+  return(list(annual = res_annual,
+              month = res_month
+  ))
 
 }
-sites = readRDS("sites.Rds")
-dat = get_all_annual_reports(sites$Id)
-annual = dat$annual
-month = dat$month
-saveRDS(dat, "traffic_annual_2014_2022raw.Rds")
-saveRDS(month, "traffic_monthly_2014_2022.Rds")
+
 
